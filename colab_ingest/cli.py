@@ -540,8 +540,8 @@ def check() -> None:
     
     # Third-party downloader scripts
     third_party_dir = Path(__file__).parent.parent / "third_party"
-    bunkr_script = third_party_dir / "BunkrDownloader" / "bunkr_downloader.py"
-    buzz_script = third_party_dir / "buzzheavier-downloader" / "buzzheavier_downloader.py"
+    bunkr_script = third_party_dir / "BunkrDownloader" / "downloader.py"
+    buzz_script = third_party_dir / "buzzheavier-downloader" / "bhdownload.py"
     
     if bunkr_script.exists():
         table.add_row("BunkrDownloader", "[green]OK[/green]", str(bunkr_script))

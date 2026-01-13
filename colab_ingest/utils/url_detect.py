@@ -34,11 +34,31 @@ BUZZHEAVIER_PATTERNS = [
     re.compile(r"^([a-zA-Z0-9]{12})$"),  # Raw 12-char ID
 ]
 
+# Bunkr domain constants for comprehensive URL matching
+# Supports 'bunkr', 'bunkrr', and 'bunkrrr' variants (1-3 r's)
+BUNKR_TLDS = r"(?:si|su|la|ru|is|to|sk|ac|black|red|cat|ws|fi|ph|cr|site|media|click|se|cx|pk|ax|ps|org)"
+
+# CDN subdomain patterns: cdn12, media-files5, i3, stream, v, videos, player
+BUNKR_SUBDOMAIN = r"(?:(?:cdn\d*|media-files\d*|i\d*|stream|v|videos|player)\.)?"
+
+# Full domain pattern combining subdomain, base domain, and TLD
+# bunkr{1,3} matches bunkr, bunkrr, or bunkrrr
+BUNKR_DOMAIN = BUNKR_SUBDOMAIN + r"bunkr{1,3}\." + BUNKR_TLDS
+
 BUNKR_PATTERNS = [
-    re.compile(r"bunkr+\.(?:si|su|la|ru|is|to|sk|ac|black|red|cat|ws|fi|ph)/[af]/([a-zA-Z0-9-]+)", re.IGNORECASE),
-    re.compile(r"bunkr+\.(?:si|su|la|ru|is|to|sk|ac|black|red|cat|ws|fi|ph)/v/([a-zA-Z0-9-]+)", re.IGNORECASE),
-    re.compile(r"bunkr+\.(?:si|su|la|ru|is|to|sk|ac|black|red|cat|ws|fi|ph)/d/([a-zA-Z0-9-]+)", re.IGNORECASE),
-    re.compile(r"bunkr+\.(?:si|su|la|ru|is|to|sk|ac|black|red|cat|ws|fi|ph)/i/([a-zA-Z0-9-]+)", re.IGNORECASE),
+    # Album URLs: /a/
+    re.compile(BUNKR_SUBDOMAIN + r"bunkr{1,3}\." + BUNKR_TLDS + r"/a/([a-zA-Z0-9_-]+)", re.IGNORECASE),
+    # File URLs: /f/
+    re.compile(BUNKR_SUBDOMAIN + r"bunkr{1,3}\." + BUNKR_TLDS + r"/f/([a-zA-Z0-9_-]+)", re.IGNORECASE),
+    # Video URLs: /v/
+    re.compile(BUNKR_SUBDOMAIN + r"bunkr{1,3}\." + BUNKR_TLDS + r"/v/([a-zA-Z0-9_-]+)", re.IGNORECASE),
+    # Download URLs: /d/
+    re.compile(BUNKR_SUBDOMAIN + r"bunkr{1,3}\." + BUNKR_TLDS + r"/d/([a-zA-Z0-9_-]+)", re.IGNORECASE),
+    # Image URLs: /i/
+    re.compile(BUNKR_SUBDOMAIN + r"bunkr{1,3}\." + BUNKR_TLDS + r"/i/([a-zA-Z0-9_-]+)", re.IGNORECASE),
+    # Direct CDN file URLs (no path prefix, just filename with extension)
+    # e.g., https://cdn12.bunkr.ru/filename-abc123.mp4
+    re.compile(BUNKR_SUBDOMAIN + r"bunkr{1,3}\." + BUNKR_TLDS + r"/([a-zA-Z0-9_-]+\.[a-zA-Z0-9]+)", re.IGNORECASE),
 ]
 
 
@@ -75,8 +95,9 @@ def detect_host(url: str) -> HostType:
     if "buzzheavier" in url_lower or "bzzhr.co" in url_lower:
         return HostType.BUZZHEAVIER
 
-    # Check for bunkr (various TLDs)
-    if re.search(r"bunkr+\.(?:si|su|la|ru|is|to|sk|ac|black|red|cat|ws|fi|ph)", url_lower):
+    # Check for bunkr (various TLDs and CDN subdomains)
+    # Uses the centralized BUNKR_DOMAIN pattern for comprehensive matching
+    if re.search(BUNKR_DOMAIN, url_lower):
         return HostType.BUNKR
 
     # Try to detect by ID pattern matching
@@ -210,18 +231,24 @@ def normalize_bunkr_url(url: str) -> str:
     try:
         parsed = urlparse(url)
 
-        # Check if it's a bunkr domain
-        if not re.match(r"bunkr+\.(?:si|su|la|ru|is|to|sk|ac|black|red|cat|ws|fi|ph)", parsed.netloc, re.IGNORECASE):
+        # Check if it's a bunkr domain (including CDN subdomains)
+        # Uses the centralized BUNKR_DOMAIN pattern for comprehensive matching
+        if not re.match(BUNKR_DOMAIN + r"$", parsed.netloc, re.IGNORECASE):
             return url
 
         # Ensure path starts with /a/, /f/, /v/, /d/, or /i/
         path = parsed.path
         if path and not path.startswith(("/a/", "/f/", "/v/", "/d/", "/i/")):
-            # Try to extract album/file identifier and default to album
+            # Check if it's a direct CDN file URL (has file extension)
             path_parts = path.strip("/").split("/")
             if path_parts and path_parts[0]:
-                # Assume it's an album if no type specified
-                path = "/a/" + path_parts[0]
+                # If it has a file extension, it's likely a direct CDN file URL
+                if "." in path_parts[-1] and len(path_parts[-1].split(".")[-1]) <= 5:
+                    # Keep the path as-is for direct file URLs
+                    pass
+                else:
+                    # Assume it's an album if no type specified
+                    path = "/a/" + path_parts[0]
 
         # Reconstruct URL
         return f"https://{parsed.netloc}{path}"
