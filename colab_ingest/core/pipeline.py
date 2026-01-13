@@ -568,8 +568,35 @@ class Pipeline:
             task_logger.error("BunkrDownloader not installed or not found")
             return []
 
+        import re
+        
         def output_callback(line: str) -> None:
             task_logger.debug(f"[bunkr] {line}")
+            # Parse progress from BunkrDownloader output
+            # Common patterns: "Downloading: 50%", "50% complete", progress bars
+            if self._progress and task.id in self._task_progress_ids:
+                # Try to extract percentage
+                percent_match = re.search(r'(\d+(?:\.\d+)?)\s*%', line)
+                if percent_match:
+                    percent = float(percent_match.group(1))
+                    task_id = self._task_progress_ids[task.id]
+                    self._progress.update(
+                        task_id,
+                        description=f"[yellow]⬇ {task.id[:8]}... {percent:.0f}%",
+                        completed=percent,
+                        total=100,
+                    )
+                # Also check for file being downloaded
+                elif "Downloading" in line or "downloading" in line:
+                    task_id = self._task_progress_ids[task.id]
+                    # Extract filename if present
+                    file_match = re.search(r'(?:Downloading|downloading)[:\s]+(.+?)(?:\s*\.\.\.|$)', line)
+                    if file_match:
+                        filename = file_match.group(1).strip()[:20]
+                        self._progress.update(
+                            task_id,
+                            description=f"[yellow]⬇ {filename}...",
+                        )
 
         result: BunkrDownloadResult = downloader.download(task.url, output_callback)
 
@@ -612,8 +639,30 @@ class Pipeline:
             # Fall back to using the full URL
             file_id = task.url
 
+        import re
+        
         def output_callback(line: str) -> None:
             task_logger.debug(f"[buzzheavier] {line}")
+            # Parse progress from BuzzHeavier output
+            if self._progress and task.id in self._task_progress_ids:
+                # Try to extract percentage
+                percent_match = re.search(r'(\d+(?:\.\d+)?)\s*%', line)
+                if percent_match:
+                    percent = float(percent_match.group(1))
+                    task_id = self._task_progress_ids[task.id]
+                    self._progress.update(
+                        task_id,
+                        description=f"[yellow]⬇ {task.id[:8]}... {percent:.0f}%",
+                        completed=percent,
+                        total=100,
+                    )
+                # Check for download activity
+                elif "download" in line.lower() or "saving" in line.lower():
+                    task_id = self._task_progress_ids[task.id]
+                    self._progress.update(
+                        task_id,
+                        description=f"[yellow]⬇ Downloading...",
+                    )
 
         result: BuzzHeavierDownloadResult = downloader.download(file_id, output_callback)
 
