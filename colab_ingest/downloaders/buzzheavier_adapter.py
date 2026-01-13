@@ -253,13 +253,15 @@ class BuzzHeavierDownloaderAdapter:
             self._logger.error(f"Error terminating process: {e}")
 
     def _collect_downloaded_files(
-        self, output_dir: Path, before_files: Set[Path]
+        self, output_dir: Path, before_files: Set[Path], include_existing: bool = False
     ) -> List[Path]:
         """Identify newly downloaded files by comparing before/after.
 
         Args:
             output_dir: Directory to scan for downloaded files.
             before_files: Set of files that existed before download (already resolved).
+            include_existing: If True and no new files found, return all existing files.
+                This handles retry scenarios where files already exist from previous attempts.
 
         Returns:
             List of newly downloaded file paths.
@@ -283,6 +285,14 @@ class BuzzHeavierDownloaderAdapter:
             f"Collected {len(new_files)} newly downloaded file(s) from {output_dir}"
         )
         self._logger.debug(f"Before files: {len(before_files)}, Current files: {len(current_files)}")
+        
+        # If no new files but process succeeded, return existing files (retry scenario)
+        if len(new_files) == 0 and len(current_files) > 0 and include_existing:
+            self._logger.debug(
+                f"No new files detected, but returning {len(current_files)} existing file(s) "
+                "(likely from previous download attempt)"
+            )
+            return sorted(list(current_files))
         
         # Log current files for debugging if no new files found
         if len(new_files) == 0 and len(current_files) > 0:
@@ -385,13 +395,13 @@ class BuzzHeavierDownloaderAdapter:
             # Calculate elapsed time
             elapsed_time = time.time() - start_time
 
-            # Get new files (files downloaded during this operation)
-            downloaded_files = self._collect_downloaded_files(
-                self.download_dir, files_before
-            )
-
             # Check result
             if return_code == 0:
+                # Get new files (files downloaded during this operation)
+                # Use include_existing=True to handle retry scenarios where file already exists
+                downloaded_files = self._collect_downloaded_files(
+                    self.download_dir, files_before, include_existing=True
+                )
                 self._logger.info(
                     f"Download completed successfully in {elapsed_time:.1f}s. "
                     f"Downloaded {len(downloaded_files)} file(s)."
@@ -409,6 +419,11 @@ class BuzzHeavierDownloaderAdapter:
                     output_dir=self.download_dir,
                 )
             else:
+                # Get new files for failed downloads (may have partial downloads)
+                downloaded_files = self._collect_downloaded_files(
+                    self.download_dir, files_before, include_existing=False
+                )
+                
                 error_msg = f"Download failed with exit code {return_code}"
                 if output:
                     # Get last few lines for error context
