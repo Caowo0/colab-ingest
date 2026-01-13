@@ -5,10 +5,9 @@
 # This script handles complete setup and execution of colab_ingest:
 # 1. Install system dependencies (git, p7zip-full, unrar)
 # 2. Clone/update the repo if needed
-# 3. Initialize git submodules for third-party downloaders
-# 4. Install Python dependencies
-# 5. Mount Google Drive if not mounted
-# 6. Run the CLI with provided arguments
+# 3. Install Python dependencies
+# 4. Mount Google Drive if not mounted
+# 5. Run the CLI with provided arguments
 
 set -e
 
@@ -123,26 +122,6 @@ setup_repository() {
     fi
 }
 
-# Initialize git submodules
-setup_submodules() {
-    print_step "Initializing git submodules..."
-    
-    if [ -f ".gitmodules" ]; then
-        git submodule update --init --recursive
-        print_success "Submodules initialized"
-        
-        # Verify submodules
-        if [ -d "third_party/BunkrDownloader" ]; then
-            print_success "BunkrDownloader submodule ready"
-        fi
-        if [ -d "third_party/buzzheavier-downloader" ]; then
-            print_success "buzzheavier-downloader submodule ready"
-        fi
-    else
-        print_warning "No .gitmodules file found, skipping submodule setup"
-    fi
-}
-
 # Install Python dependencies
 install_python_deps() {
     print_step "Installing Python dependencies..."
@@ -150,15 +129,15 @@ install_python_deps() {
     # Use pip to install in editable mode
     pip install -e . -q
     
-    # Install submodule dependencies if they exist
-    if [ -f "third_party/BunkrDownloader/requirements.txt" ]; then
+    # Install bundled downloader dependencies if they exist
+    if [ -f "colab_ingest/downloaders/bunkr/requirements.txt" ]; then
         print_step "Installing BunkrDownloader dependencies..."
-        pip install -r third_party/BunkrDownloader/requirements.txt -q
+        pip install -r colab_ingest/downloaders/bunkr/requirements.txt -q
     fi
     
-    if [ -f "third_party/buzzheavier-downloader/requirements.txt" ]; then
+    if [ -f "colab_ingest/downloaders/buzzheavier/requirements.txt" ]; then
         print_step "Installing buzzheavier-downloader dependencies..."
-        pip install -r third_party/buzzheavier-downloader/requirements.txt -q
+        pip install -r colab_ingest/downloaders/buzzheavier/requirements.txt -q
     fi
     
     print_success "Python dependencies installed"
@@ -269,7 +248,6 @@ main() {
     check_colab_environment
     install_system_deps
     setup_repository
-    setup_submodules
     install_python_deps
     mount_google_drive
     

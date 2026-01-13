@@ -50,10 +50,9 @@ bash scripts/colab_one_command.sh --help
 
 This script:
 1. Installs system dependencies (git, p7zip-full, unrar)
-2. Initializes git submodules for third-party downloaders
-3. Installs Python dependencies
-4. Mounts Google Drive
-5. Runs the CLI
+2. Installs Python dependencies
+3. Mounts Google Drive
+4. Runs the CLI
 
 ### Local Development
 
@@ -61,9 +60,6 @@ This script:
 # Clone repository
 git clone https://github.com/yourusername/colab-ingest.git
 cd colab-ingest
-
-# Initialize submodules
-git submodule update --init --recursive
 
 # Install in development mode
 pip install -e ".[dev]"
@@ -240,7 +236,7 @@ colab-ingest run \
   - `https://buzzheavier.com/XXXXXXXX`
   - `https://buzzheavier.com/f/XXXXXXXX`
 - **Authentication:** None required
-- **Note:** Uses third-party downloader via git submodule
+- **Note:** Uses bundled third-party downloader
 
 ### Bunkr
 
@@ -249,7 +245,7 @@ colab-ingest run \
   - Videos: `https://bunkr.si/v/XXXXXXXX`
   - Images: `https://bunkr.si/i/XXXXXXXX`
 - **Authentication:** None required
-- **Note:** Uses third-party downloader via git submodule
+- **Note:** Uses bundled third-party downloader
 - **Domains:** Also supports `bunkr.la`, `bunkr.su`, `bunkrr.su`, etc.
 
 ## 📝 Links File Format
@@ -348,15 +344,15 @@ export PIXELDRAIN_API_KEY="your-api-key"
 colab-ingest run ... --pixeldrain-api-key "your-key"
 ```
 
-#### "BunkrDownloader not installed"
+#### "BunkrDownloader not found"
 
 ```bash
-# Initialize submodules
-git submodule update --init --recursive
-
-# Verify
+# Verify installation
 colab-ingest check
 ```
+
+The BunkrDownloader and buzzheavier-downloader modules are bundled with the package
+in [`colab_ingest/downloaders/bunkr/`](colab_ingest/downloaders/bunkr/) and [`colab_ingest/downloaders/buzzheavier/`](colab_ingest/downloaders/buzzheavier/).
 
 #### "No space left on device"
 
@@ -410,19 +406,17 @@ colab-ingest/
 │   ├── downloaders/        # Host-specific downloaders
 │   │   ├── pixeldrain.py   # Pixeldrain API client
 │   │   ├── bunkr_adapter.py
-│   │   └── buzzheavier_adapter.py
+│   │   ├── buzzheavier_adapter.py
+│   │   ├── bunkr/          # Bundled BunkrDownloader
+│   │   └── buzzheavier/    # Bundled buzzheavier-downloader
 │   └── utils/              # Utilities
 │       ├── extract.py      # Archive extraction
 │       ├── upload.py       # Google Drive upload
 │       ├── url_detect.py   # URL parsing
 │       ├── paths.py        # Path management
 │       └── logging.py      # Logging setup
-├── third_party/            # Git submodules
-│   ├── BunkrDownloader/
-│   └── buzzheavier-downloader/
 ├── scripts/                # Helper scripts
 │   ├── colab_one_command.sh
-│   ├── setup_submodules.sh
 │   └── mount_drive.py
 ├── tests/                  # Test suite
 ├── docs/                   # Documentation

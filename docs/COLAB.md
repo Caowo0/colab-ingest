@@ -31,10 +31,9 @@ PIXELDRAIN_API_KEY="your-key-here" bash scripts/colab_one_command.sh \
 
 1. ✅ Checks if running in Colab environment
 2. ✅ Installs system dependencies (`git`, `p7zip-full`, `unrar`)
-3. ✅ Initializes git submodules for third-party downloaders
-4. ✅ Installs Python dependencies
-5. ✅ Mounts Google Drive (if not already mounted)
-6. ✅ Runs the pipeline with your specified options
+3. ✅ Installs Python dependencies
+4. ✅ Mounts Google Drive (if not already mounted)
+5. ✅ Runs the pipeline with your specified options
 
 ## 📝 Manual Setup Steps
 
@@ -55,35 +54,27 @@ git clone https://github.com/yourusername/colab-ingest.git
 cd colab-ingest
 ```
 
-### Step 3: Initialize Submodules
-
-```bash
-git submodule update --init --recursive
-```
-
-This downloads the third-party downloaders (BunkrDownloader, buzzheavier-downloader).
-
-### Step 4: Install System Dependencies
+### Step 3: Install System Dependencies
 
 ```bash
 apt-get update -qq
 apt-get install -y -qq p7zip-full unrar
 ```
 
-### Step 5: Install Python Package
+### Step 4: Install Python Package
 
 ```bash
 pip install -e .
 ```
 
-### Step 6: Install Submodule Dependencies
+### Step 5: Install Bundled Dependencies
 
 ```bash
-pip install -r third_party/BunkrDownloader/requirements.txt
-pip install -r third_party/buzzheavier-downloader/requirements.txt
+pip install -r colab_ingest/downloaders/bunkr/requirements.txt
+# buzzheavier-downloader has no additional requirements
 ```
 
-### Step 7: Mount Google Drive
+### Step 6: Mount Google Drive
 
 ```bash
 python scripts/mount_drive.py
@@ -95,13 +86,13 @@ from google.colab import drive
 drive.mount('/content/drive')
 ```
 
-### Step 8: Set Environment Variables
+### Step 7: Set Environment Variables
 
 ```bash
 export PIXELDRAIN_API_KEY="your-api-key-here"
 ```
 
-### Step 9: Run the Tool
+### Step 8: Run the Tool
 
 ```bash
 colab-ingest run \

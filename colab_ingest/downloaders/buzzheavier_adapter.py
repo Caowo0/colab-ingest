@@ -1,7 +1,7 @@
-"""BuzzHeavier downloader adapter wrapping the third-party buzzheavier-downloader repository.
+"""BuzzHeavier downloader adapter wrapping the bundled buzzheavier-downloader module.
 
 This module provides the BuzzHeavierDownloaderAdapter class for downloading files
-from BuzzHeavier using the buzzheavier-downloader third-party tool via subprocess calls.
+from BuzzHeavier using the bundled buzzheavier-downloader tool via subprocess calls.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ class BuzzHeavierDownloadTimeoutError(BuzzHeavierDownloaderError):
 
 
 class BuzzHeavierDownloaderAdapter:
-    """Adapter for the third-party buzzheavier-downloader repository.
+    """Adapter for the bundled buzzheavier-downloader module.
 
     Wraps the buzzheavier-downloader tool using subprocess calls for downloading
     files from BuzzHeavier using ID or full URL.
@@ -71,7 +71,7 @@ class BuzzHeavierDownloaderAdapter:
 
     Attributes:
         download_dir: Directory to save downloaded files.
-        third_party_path: Path to the third_party/buzzheavier-downloader directory.
+        third_party_path: Path to the bundled buzzheavier-downloader directory.
         timeout: Timeout in seconds for each download.
     """
 
@@ -87,7 +87,7 @@ class BuzzHeavierDownloaderAdapter:
         Args:
             download_dir: Directory where files will be downloaded.
             third_party_path: Path to the buzzheavier-downloader directory.
-                If None, auto-detects from project root.
+                If None, uses the bundled module in the same directory.
             timeout: Timeout in seconds for each download (default 30 minutes).
             logger: Optional logger instance. If None, uses default logger.
         """
@@ -110,37 +110,19 @@ class BuzzHeavierDownloaderAdapter:
         )
 
     def _auto_detect_third_party_path(self) -> Path:
-        """Auto-detect the third_party/buzzheavier-downloader directory.
+        """Auto-detect the buzzheavier module directory.
 
-        Searches for the buzzheavier-downloader directory relative to the project root
-        by traversing up from this file's location.
+        Returns the path to the bundled buzzheavier downloader module which is
+        located in the same directory as this adapter file.
 
         Returns:
-            Path to the buzzheavier-downloader directory.
+            Path to the buzzheavier downloader directory.
         """
-        # Start from this file's directory and traverse up
-        current = Path(__file__).resolve().parent
-
-        # Traverse up to find project root (look for common markers)
-        for _ in range(10):  # Limit traversal depth
-            potential_path = current / "third_party" / "buzzheavier-downloader"
-            if potential_path.exists():
-                return potential_path
-
-            # Also check if we're at a project root (has pyproject.toml or .git)
-            if (current / "pyproject.toml").exists() or (current / ".git").exists():
-                return current / "third_party" / "buzzheavier-downloader"
-
-            parent = current.parent
-            if parent == current:
-                break
-            current = parent
-
-        # Default to relative path from workspace
-        return Path("third_party/buzzheavier-downloader")
+        # The buzzheavier module is bundled in the same directory as this adapter
+        return Path(__file__).resolve().parent / "buzzheavier"
 
     def _find_downloader_script(self) -> Path:
-        """Locate the bhdownload.py script in the third_party directory.
+        """Locate the bhdownload.py script in the bundled buzzheavier directory.
 
         Returns:
             Path to the bhdownload.py script.
@@ -153,14 +135,9 @@ class BuzzHeavierDownloaderAdapter:
         if not script_path.exists():
             error_msg = (
                 f"buzzheavier-downloader script not found at: {script_path}\n\n"
-                "Installation instructions:\n"
-                "1. Clone the buzzheavier-downloader repository as a git submodule:\n"
-                "   git submodule add https://github.com/gongchandang49/buzzheavier-downloader.git "
-                "third_party/buzzheavier-downloader\n\n"
-                "2. Or clone it directly:\n"
-                "   git clone https://github.com/gongchandang49/buzzheavier-downloader.git "
-                "third_party/buzzheavier-downloader\n\n"
-                "3. Install any required dependencies from the repository."
+                "The buzzheavier-downloader module should be bundled at:\n"
+                f"  {self.third_party_path}\n\n"
+                "Please ensure the module is properly installed."
             )
             self._logger.error(error_msg)
             raise BuzzHeavierScriptNotFoundError(error_msg)

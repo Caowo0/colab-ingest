@@ -1,7 +1,7 @@
-"""Bunkr downloader adapter wrapping the third-party BunkrDownloader repository.
+"""Bunkr downloader adapter wrapping the bundled BunkrDownloader module.
 
 This module provides the BunkrDownloaderAdapter class for downloading files
-from Bunkr using the BunkrDownloader third-party tool via subprocess calls.
+from Bunkr using the bundled BunkrDownloader tool via subprocess calls.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ class BunkrDownloadTimeoutError(BunkrDownloaderError):
 
 
 class BunkrDownloaderAdapter:
-    """Adapter for the third-party BunkrDownloader repository.
+    """Adapter for the bundled BunkrDownloader module.
 
     Wraps the BunkrDownloader tool using subprocess calls for downloading
     files from Bunkr URLs (both album /a/ and file /f/ URLs).
@@ -71,7 +71,7 @@ class BunkrDownloaderAdapter:
     Attributes:
         download_dir: Directory to save downloaded files.
         max_retries: Maximum number of retry attempts for failed downloads.
-        third_party_path: Path to the third_party/BunkrDownloader directory.
+        third_party_path: Path to the bundled bunkr downloader directory.
         timeout: Timeout in seconds for each download.
     """
 
@@ -89,7 +89,7 @@ class BunkrDownloaderAdapter:
             download_dir: Directory where files will be downloaded.
             max_retries: Maximum retry attempts for failed downloads.
             third_party_path: Path to the BunkrDownloader directory.
-                If None, auto-detects from project root.
+                If None, uses the bundled module in the same directory.
             timeout: Timeout in seconds for each download (default 30 minutes).
             logger: Optional logger instance. If None, uses default logger.
         """
@@ -113,37 +113,19 @@ class BunkrDownloaderAdapter:
         )
 
     def _auto_detect_third_party_path(self) -> Path:
-        """Auto-detect the third_party/BunkrDownloader directory.
+        """Auto-detect the bunkr module directory.
 
-        Searches for the BunkrDownloader directory relative to the project root
-        by traversing up from this file's location.
+        Returns the path to the bundled bunkr downloader module which is
+        located in the same directory as this adapter file.
 
         Returns:
-            Path to the BunkrDownloader directory.
+            Path to the bunkr downloader directory.
         """
-        # Start from this file's directory and traverse up
-        current = Path(__file__).resolve().parent
-
-        # Traverse up to find project root (look for common markers)
-        for _ in range(10):  # Limit traversal depth
-            potential_path = current / "third_party" / "BunkrDownloader"
-            if potential_path.exists():
-                return potential_path
-
-            # Also check if we're at a project root (has pyproject.toml or .git)
-            if (current / "pyproject.toml").exists() or (current / ".git").exists():
-                return current / "third_party" / "BunkrDownloader"
-
-            parent = current.parent
-            if parent == current:
-                break
-            current = parent
-
-        # Default to relative path from workspace
-        return Path("third_party/BunkrDownloader")
+        # The bunkr module is bundled in the same directory as this adapter
+        return Path(__file__).resolve().parent / "bunkr"
 
     def _find_downloader_script(self) -> Path:
-        """Locate the downloader.py script in the third_party directory.
+        """Locate the downloader.py script in the bundled bunkr directory.
 
         Returns:
             Path to the downloader.py script.
@@ -156,15 +138,9 @@ class BunkrDownloaderAdapter:
         if not script_path.exists():
             error_msg = (
                 f"BunkrDownloader script not found at: {script_path}\n\n"
-                "Installation instructions:\n"
-                "1. Clone the BunkrDownloader repository as a git submodule:\n"
-                "   git submodule add https://github.com/Lysagxra/BunkrDownloader.git "
-                "third_party/BunkrDownloader\n\n"
-                "2. Or clone it directly:\n"
-                "   git clone https://github.com/Lysagxra/BunkrDownloader.git "
-                "third_party/BunkrDownloader\n\n"
-                "3. Install dependencies:\n"
-                "   pip install -r third_party/BunkrDownloader/requirements.txt"
+                "The BunkrDownloader module should be bundled at:\n"
+                f"  {self.third_party_path}\n\n"
+                "Please ensure the module is properly installed."
             )
             self._logger.error(error_msg)
             raise BunkrScriptNotFoundError(error_msg)
