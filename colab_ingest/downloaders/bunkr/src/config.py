@@ -78,7 +78,7 @@ MAX_WORKERS = 3         # The maximum number of threads for concurrent downloads
 MAX_RETRIES = 5         # The maximum number of retries for downloading a single media.
 
 # Mapping of URL identifiers to a boolean for album (True) vs single file (False).
-URL_TYPE_MAPPING = {"a": True, "f": False, "i": False, "v": False}
+URL_TYPE_MAPPING = {"a": True, "f": False, "i": False, "v": False, "d": False}
 
 # Constants for file sizes, expressed in bytes.
 KB = 1024
