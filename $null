@@ -1,0 +1,15 @@
+Remove-Item : Cannot remove item C:\Users\caowo0_\Documents\Project\Colab\$null: The process cannot access the file 
+'C:\Users\caowo0_\Documents\Project\Colab\$null' because it is being used by another process.
+At line:1 char:1
++ Remove-Item -Force '$null' ; git commit -m refactor: bundle bunkr and ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : WriteError: (C:\Users\caowo0...ect\Colab\$null:FileInfo) [Remove-Item], IOException
+    + FullyQualifiedErrorId : RemoveFileSystemItemIOError,Microsoft.PowerShell.Commands.RemoveItemCommand
+error: pathspec 'bundle' did not match any file(s) known to git
+error: pathspec 'bunkr' did not match any file(s) known to git
+error: pathspec 'and' did not match any file(s) known to git
+error: pathspec 'buzzheavier' did not match any file(s) known to git
+error: pathspec 'downloaders' did not match any file(s) known to git
+error: pathspec 'instead' did not match any file(s) known to git
+error: pathspec 'of' did not match any file(s) known to git
+error: pathspec 'submodules' did not match any file(s) known to git

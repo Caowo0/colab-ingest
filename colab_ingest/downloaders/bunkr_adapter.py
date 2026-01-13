@@ -291,12 +291,12 @@ class BunkrDownloaderAdapter:
             output_dir: Directory to scan.
 
         Returns:
-            Set of existing file paths.
+            Set of existing file paths (resolved to absolute paths).
         """
         if not output_dir.exists():
             return set()
         
-        return {f for f in output_dir.rglob("*") if f.is_file()}
+        return {f.resolve() for f in output_dir.rglob("*") if f.is_file()}
 
     def download(
         self,

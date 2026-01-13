@@ -259,7 +259,7 @@ class BuzzHeavierDownloaderAdapter:
 
         Args:
             output_dir: Directory to scan for downloaded files.
-            before_files: Set of files that existed before download.
+            before_files: Set of files that existed before download (already resolved).
 
         Returns:
             List of newly downloaded file paths.
@@ -267,18 +267,26 @@ class BuzzHeavierDownloaderAdapter:
         if not output_dir.exists():
             return []
 
-        # Get current files
+        # Small delay to ensure filesystem has synced (especially on network drives)
+        time.sleep(0.5)
+
+        # Get current files - resolve to absolute paths for consistent comparison
         current_files: Set[Path] = set()
         for item in output_dir.rglob("*"):
             if item.is_file():
-                current_files.add(item)
+                current_files.add(item.resolve())
 
-        # Find new files
+        # Find new files (before_files should already be resolved)
         new_files = current_files - before_files
 
         self._logger.debug(
             f"Collected {len(new_files)} newly downloaded file(s) from {output_dir}"
         )
+        self._logger.debug(f"Before files: {len(before_files)}, Current files: {len(current_files)}")
+        
+        # Log current files for debugging if no new files found
+        if len(new_files) == 0 and len(current_files) > 0:
+            self._logger.debug(f"Current files in dir: {[str(f) for f in current_files]}")
 
         return sorted(list(new_files))
 
@@ -289,12 +297,12 @@ class BuzzHeavierDownloaderAdapter:
             output_dir: Directory to scan.
 
         Returns:
-            Set of existing file paths.
+            Set of existing file paths (resolved to absolute paths).
         """
         if not output_dir.exists():
             return set()
 
-        return {f for f in output_dir.rglob("*") if f.is_file()}
+        return {f.resolve() for f in output_dir.rglob("*") if f.is_file()}
 
     def download(
         self,
