@@ -1,0 +1,53 @@
+# =============================================================================
+# Example Links File for colab-ingest
+# =============================================================================
+#
+# This file demonstrates the format for specifying download links.
+# Copy this file to 'links.txt' and add your own links.
+#
+# FORMAT:
+# - One URL per line
+# - Lines starting with # are comments (ignored)
+# - Empty lines are ignored
+# - Whitespace is trimmed from each line
+#
+# SUPPORTED HOSTS:
+# - Pixeldrain: https://pixeldrain.com/u/XXXXXXXX
+# - Buzzheavier: https://buzzheavier.com/XXXXXXXX
+# - Bunkr: https://bunkr.si/a/XXXXXXXX (albums)
+#          https://bunkr.si/v/XXXXXXXX (videos)
+#          https://bunkr.si/i/XXXXXXXX (images)
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Pixeldrain Examples
+# -----------------------------------------------------------------------------
+# Single file download:
+# https://pixeldrain.com/u/abc12345
+#
+# List/folder download:
+# https://pixeldrain.com/l/xyz98765
+
+# -----------------------------------------------------------------------------
+# Buzzheavier Examples
+# -----------------------------------------------------------------------------
+# Standard download link:
+# https://buzzheavier.com/f/abc123def456
+
+# -----------------------------------------------------------------------------
+# Bunkr Examples
+# -----------------------------------------------------------------------------
+# Album (multiple files):
+# https://bunkr.si/a/AlbumName123
+#
+# Single video:
+# https://bunkr.si/v/VideoFile456
+#
+# Single image:
+# https://bunkr.si/i/ImageFile789
+
+# =============================================================================
+# Add your links below this line:
+# =============================================================================
+

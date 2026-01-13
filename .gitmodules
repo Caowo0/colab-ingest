@@ -1,0 +1,19 @@
+# =============================================================================
+# Git Submodules Configuration
+# =============================================================================
+# Third-party downloaders used by colab-ingest
+#
+# To initialize submodules after cloning:
+#   git submodule update --init --recursive
+#
+# To update submodules to latest:
+#   git submodule update --remote --merge
+# =============================================================================
+
+[submodule "third_party/BunkrDownloader"]
+	path = third_party/BunkrDownloader
+	url = https://github.com/Lysagxra/BunkrDownloader.git
+
+[submodule "third_party/buzzheavier-downloader"]
+	path = third_party/buzzheavier-downloader
+	url = https://github.com/gongchandang49/buzzheavier-downloader.git
