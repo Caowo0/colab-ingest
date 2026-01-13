@@ -5,12 +5,15 @@ This module provides logging setup for the colab_ingest CLI tool with:
 - File logging to timestamped log files
 - Task prefix support for tracking operations
 - Sensitive data masking for API keys
+- Colab environment detection for proper output handling
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -18,13 +21,57 @@ from typing import Optional
 from rich.logging import RichHandler
 
 
+def is_colab_environment() -> bool:
+    """Detect if running in Google Colab environment.
+
+    Returns:
+        True if running in Colab, False otherwise.
+    """
+    # Check for Colab-specific environment variables and modules
+    try:
+        import google.colab  # noqa: F401
+        return True
+    except ImportError:
+        pass
+
+    # Alternative check via environment
+    if "COLAB_GPU" in os.environ or "COLAB_TPU_ADDR" in os.environ:
+        return True
+
+    # Check if running in IPython with Colab kernel
+    if "COLAB_RELEASE_TAG" in os.environ:
+        return True
+
+    return False
+
+
+class FlushingStreamHandler(logging.StreamHandler):
+    """StreamHandler that flushes after every emit.
+
+    This ensures log messages appear immediately in Google Colab's output,
+    which otherwise might buffer output and delay display.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Emit a record and flush immediately.
+
+        Args:
+            record: The log record to emit.
+        """
+        super().emit(record)
+        self.flush()
+
+
 def setup_logging(workdir: Path, verbose: bool = True) -> logging.Logger:
     """Set up logging with rich console output and file handler.
 
     Creates a logger with:
-    - Console output using RichHandler with timestamps
+    - Console output using RichHandler with timestamps (or StreamHandler in Colab)
     - File output to workdir/logs/run_YYYYMMDD_HHMMSS.log
     - DEBUG level for file, INFO for console (DEBUG if verbose)
+
+    In Google Colab environment, uses StreamHandler instead of RichHandler
+    for better compatibility with Colab's output system.
 
     Args:
         workdir: Working directory path where logs directory will be created.
@@ -48,17 +95,31 @@ def setup_logging(workdir: Path, verbose: bool = True) -> logging.Logger:
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
 
-    # Console handler with Rich
+    # Console handler - use StreamHandler in Colab for better compatibility
     console_level = logging.DEBUG if verbose else logging.INFO
-    console_handler = RichHandler(
-        show_time=True,
-        show_path=False,
-        rich_tracebacks=True,
-        tracebacks_show_locals=verbose,
-        markup=True,
-    )
-    console_handler.setLevel(console_level)
-    console_handler.setFormatter(logging.Formatter("%(message)s"))
+    in_colab = is_colab_environment()
+
+    if in_colab:
+        # Use FlushingStreamHandler for Colab compatibility - ensures immediate output
+        console_handler = FlushingStreamHandler(sys.stdout)
+        console_handler.setLevel(console_level)
+        console_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s | %(levelname)-8s | %(message)s",
+                datefmt="%H:%M:%S",
+            )
+        )
+    else:
+        # Use RichHandler for terminal environments
+        console_handler = RichHandler(
+            show_time=True,
+            show_path=False,
+            rich_tracebacks=True,
+            tracebacks_show_locals=verbose,
+            markup=True,
+        )
+        console_handler.setLevel(console_level)
+        console_handler.setFormatter(logging.Formatter("%(message)s"))
 
     # File handler with detailed format
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
@@ -73,7 +134,10 @@ def setup_logging(workdir: Path, verbose: bool = True) -> logging.Logger:
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
-    logger.debug(f"Logging initialized. Log file: {log_file}")
+    if in_colab:
+        logger.debug(f"Logging initialized (Colab mode). Log file: {log_file}")
+    else:
+        logger.debug(f"Logging initialized. Log file: {log_file}")
 
     return logger
 

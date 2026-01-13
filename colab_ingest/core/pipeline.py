@@ -11,6 +11,7 @@ import asyncio
 import logging
 import signal
 import sys
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 from dataclasses import dataclass, field
@@ -38,7 +39,7 @@ from ..downloaders.buzzheavier_adapter import (
 )
 from ..downloaders.pixeldrain import PixeldrainDownloader, DownloadResult
 from ..utils.extract import extract_archive, ExtractionResult
-from ..utils.logging import setup_logging, TaskLogAdapter
+from ..utils.logging import setup_logging, TaskLogAdapter, is_colab_environment
 from ..utils.paths import WorkdirManager
 from ..utils.upload import upload_to_drive, UploadResult
 from ..utils.url_detect import HostType, parse_links_file
@@ -159,8 +160,11 @@ class Pipeline:
         self._state_db = StateDB(self._workdir_manager.state_db_path)
         self._state_db.init_db()
 
-        # Rich console for progress display
-        self._console = Console()
+        # Detect if running in Colab - use simple logging instead of rich progress
+        self._in_colab = is_colab_environment()
+
+        # Rich console for progress display (only used when not in Colab)
+        self._console = Console() if not self._in_colab else None
 
         # Shutdown handling
         self._shutdown_requested = False
@@ -171,11 +175,13 @@ class Pipeline:
         self._stats = PipelineStats()
         self._stats_lock = threading.Lock()
 
-        # Progress tracking
+        # Progress tracking (disabled in Colab for better output)
         self._progress: Optional[Progress] = None
         self._overall_task_id: Optional[TaskID] = None
         self._task_progress_ids: Dict[str, TaskID] = {}
 
+        if self._in_colab:
+            self.logger.info("Running in Colab mode (simple logging enabled)")
         self.logger.info(f"Pipeline initialized with config: {config}")
 
     def run(self) -> PipelineStats:
@@ -301,7 +307,8 @@ class Pipeline:
             )
             self.logger.info(f"  - Download to: {self._workdir_manager.get_task_download_dir(task.id)}")
             self.logger.info(f"  - Extract to: {self._workdir_manager.get_task_extract_dir(task.id)}")
-            self.logger.info(f"  - Upload to: {self.config.drive_dest / task.id}")
+            self.logger.info(f"  - Upload to: {self.config.drive_dest}/<filename_without_extension>")
+            self.logger.info(f"    (folder name derived from downloaded file, e.g., 'video' from 'video.zip')")
         self.logger.info(f"=== Would process {len(tasks)} task(s) ===")
 
     async def _process_tasks_concurrent(self, tasks: List[Task]) -> None:
@@ -310,7 +317,12 @@ class Pipeline:
         Args:
             tasks: List of tasks to process.
         """
-        # Create progress display
+        # In Colab mode, use simple logging instead of rich progress
+        if self._in_colab:
+            await self._process_tasks_concurrent_simple(tasks)
+            return
+
+        # Create progress display (rich mode for terminal)
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -357,6 +369,53 @@ class Pipeline:
 
             self._progress = None
 
+    async def _process_tasks_concurrent_simple(self, tasks: List[Task]) -> None:
+        """Process tasks concurrently with simple logging (for Colab).
+
+        This method uses standard logging instead of rich progress bars,
+        which works better in Google Colab's output system.
+
+        Args:
+            tasks: List of tasks to process.
+        """
+        self.logger.info(f"Processing {len(tasks)} task(s) with concurrency={self.config.concurrency}")
+        
+        # Use ThreadPoolExecutor for concurrent processing
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=self.config.concurrency) as executor:
+            # Submit all tasks
+            futures: List[Future] = []
+            for i, task in enumerate(tasks, 1):
+                if self._shutdown_requested:
+                    break
+
+                self.logger.info(f"[{i}/{len(tasks)}] Queuing task: {task.url[:60]}...")
+                future = executor.submit(self._process_task, task)
+                futures.append(future)
+                with self._shutdown_lock:
+                    self._active_futures[task.id] = future
+
+            # Wait for all tasks to complete
+            completed_count = 0
+            for future in futures:
+                if self._shutdown_requested:
+                    self.logger.info("Shutdown requested, waiting for active tasks...")
+                    break
+
+                try:
+                    # Use asyncio to wait without blocking
+                    await loop.run_in_executor(None, future.result)
+                    completed_count += 1
+                except Exception as e:
+                    self.logger.error(f"Task execution error: {e}")
+                    completed_count += 1
+                
+                # Log progress periodically
+                self.logger.info(
+                    f"Progress: {completed_count}/{len(tasks)} tasks processed "
+                    f"({self._stats.completed} completed, {self._stats.failed} failed)"
+                )
+
     def _process_task(self, task: Task) -> bool:
         """Process single task: download → extract → upload → cleanup.
 
@@ -399,8 +458,8 @@ class Pipeline:
                 self._mark_task_failed(task, "Extraction failed")
                 return False
 
-            # Phase 3: Upload
-            success = self._upload_task(task, files_to_upload, task_logger)
+            # Phase 3: Upload (pass downloaded_files to get meaningful folder name)
+            success = self._upload_task(task, files_to_upload, task_logger, downloaded_files)
             if not success:
                 self._mark_task_failed(task, "Upload failed")
                 return False
@@ -528,8 +587,20 @@ class Pipeline:
             logger=self.logger,
         )
 
+        # Track last logged percentage for Colab mode
+        last_logged_percent = [0]
+        
         # Create wrapper callback for pixeldrain's signature
         def pd_progress_callback(downloaded: int, total: int, speed: float, eta: float) -> None:
+            # In Colab mode, log progress milestones
+            if self._in_colab and total > 0:
+                percent = int((downloaded / total) * 100)
+                # Log every 10% milestone
+                if percent >= last_logged_percent[0] + 10:
+                    last_logged_percent[0] = (percent // 10) * 10
+                    speed_mb = speed / (1024 * 1024) if speed > 0 else 0
+                    task_logger.info(f"Download progress: {percent}% ({speed_mb:.1f} MB/s)")
+            
             if progress_callback:
                 progress_callback(downloaded, total, speed)
 
@@ -570,9 +641,27 @@ class Pipeline:
 
         import re
         
+        # Track last logged percentage for Colab mode
+        last_logged_percent = [0]
+        
         def output_callback(line: str) -> None:
-            task_logger.debug(f"[bunkr] {line}")
-            # Parse progress from BunkrDownloader output
+            # In Colab mode, log progress to output
+            if self._in_colab:
+                # Log all non-empty lines to show progress
+                if line.strip():
+                    task_logger.info(f"[bunkr] {line}")
+                # Also log percentage milestones
+                percent_match = re.search(r'(\d+(?:\.\d+)?)\s*%', line)
+                if percent_match:
+                    percent = int(float(percent_match.group(1)))
+                    # Log every 10% milestone
+                    if percent >= last_logged_percent[0] + 10:
+                        last_logged_percent[0] = (percent // 10) * 10
+                        task_logger.info(f"Download progress: {percent}%")
+            else:
+                task_logger.debug(f"[bunkr] {line}")
+            
+            # Parse progress from BunkrDownloader output for rich progress
             # Common patterns: "Downloading: 50%", "50% complete", progress bars
             if self._progress and task.id in self._task_progress_ids:
                 # Try to extract percentage
@@ -641,9 +730,27 @@ class Pipeline:
 
         import re
         
+        # Track last logged percentage for Colab mode
+        last_logged_percent = [0]
+        
         def output_callback(line: str) -> None:
-            task_logger.debug(f"[buzzheavier] {line}")
-            # Parse progress from BuzzHeavier output
+            # In Colab mode, log progress to output
+            if self._in_colab:
+                # Log all non-empty lines to show progress
+                if line.strip():
+                    task_logger.info(f"[buzzheavier] {line}")
+                # Also log percentage milestones
+                percent_match = re.search(r'(\d+(?:\.\d+)?)\s*%', line)
+                if percent_match:
+                    percent = int(float(percent_match.group(1)))
+                    # Log every 10% milestone
+                    if percent >= last_logged_percent[0] + 10:
+                        last_logged_percent[0] = (percent // 10) * 10
+                        task_logger.info(f"Download progress: {percent}%")
+            else:
+                task_logger.debug(f"[buzzheavier] {line}")
+            
+            # Parse progress from BuzzHeavier output for rich progress
             if self._progress and task.id in self._task_progress_ids:
                 # Try to extract percentage
                 percent_match = re.search(r'(\d+(?:\.\d+)?)\s*%', line)
@@ -727,11 +834,59 @@ class Pipeline:
         else:
             return all_success, files_to_upload
 
+    def _get_folder_name_from_files(
+        self,
+        downloaded_files: List[Path],
+        task: Task,
+    ) -> str:
+        """Extract a meaningful folder name from downloaded files.
+
+        Uses the first downloaded file's name (without archive extension like .zip)
+        as the folder name. Falls back to task.id if no suitable name found.
+
+        Args:
+            downloaded_files: List of downloaded file paths.
+            task: The task being processed (for fallback).
+
+        Returns:
+            A sanitized folder name string.
+        """
+        if not downloaded_files:
+            return task.id
+
+        # Get the first downloaded file
+        first_file = downloaded_files[0]
+        filename = first_file.name
+
+        # Remove common archive extensions to get the base name
+        archive_extensions = [
+            '.zip', '.rar', '.7z', '.tar', '.tar.gz', '.tar.bz2', '.tar.xz',
+            '.tgz', '.tbz2', '.txz', '.gz', '.bz2', '.xz'
+        ]
+
+        base_name = filename
+        for ext in archive_extensions:
+            if base_name.lower().endswith(ext):
+                base_name = base_name[:-len(ext)]
+                break
+
+        # Sanitize the folder name - remove invalid characters
+        # Replace problematic characters with underscore
+        sanitized = re.sub(r'[<>:"/\\|?*]', '_', base_name)
+        sanitized = sanitized.strip('. ')  # Remove leading/trailing dots and spaces
+
+        # If sanitization results in empty string, use task.id
+        if not sanitized:
+            return task.id
+
+        return sanitized
+
     def _upload_task(
         self,
         task: Task,
         files_to_upload: List[Path],
         task_logger: TaskLogAdapter,
+        downloaded_files: Optional[List[Path]] = None,
     ) -> bool:
         """Upload files to Google Drive.
 
@@ -739,6 +894,7 @@ class Pipeline:
             task: The task being processed.
             files_to_upload: List of files/directories to upload.
             task_logger: Logger with task context.
+            downloaded_files: Original downloaded files (used to determine folder name).
 
         Returns:
             True if all uploads succeeded, False otherwise.
@@ -746,8 +902,18 @@ class Pipeline:
         task_logger.info(f"Uploading {len(files_to_upload)} item(s) to Drive")
         self._state_db.update_status(task.id, TaskStatus.UPLOADING)
 
-        # Create task-specific destination directory
-        task_dest = self.config.drive_dest / task.id
+        # Get meaningful folder name from downloaded files (name before .zip)
+        # If downloaded_files not provided, try to extract from files_to_upload parent
+        if downloaded_files:
+            folder_name = self._get_folder_name_from_files(downloaded_files, task)
+        else:
+            # Fallback: try to use files_to_upload to determine name
+            folder_name = self._get_folder_name_from_files(files_to_upload, task)
+
+        # Create task-specific destination directory using meaningful name
+        task_dest = self.config.drive_dest / folder_name
+        task_logger.info(f"Upload destination folder: {folder_name}")
+
         all_success = True
         output_paths: List[str] = []
 
